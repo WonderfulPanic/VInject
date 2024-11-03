@@ -1,0 +1,9 @@
+{
+	"id": "vinject",
+	"name": "VInject",
+	"version": "1.0.0",
+	"authors": [
+		"WonderfulPanic"
+	],
+	"main": "wonderfulpanic.vinject.injector.VInjectPlugin"
+}
