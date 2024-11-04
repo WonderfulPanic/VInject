@@ -17,9 +17,12 @@
 
 package wonderfulpanic.vinject.injector.util;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -79,6 +82,17 @@ public abstract class ResourceUtil {
 		ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
 		node.accept(writer);
 		return writer.toByteArray();
+	}
+	public static void exportClass(byte[] bytes, String pluginId, String name) {
+		File file = Path.of("vinject-export", pluginId, name).toFile();
+		try {
+			file.getParentFile().mkdirs();
+			try (FileOutputStream out = new FileOutputStream(file)) {
+				out.write(bytes);
+			}
+		} catch (IOException e) {
+			throw new InternalError(e);
+		}
 	}
 	public static String asValidPath(String name) {
 		return asPath(validateName(name));

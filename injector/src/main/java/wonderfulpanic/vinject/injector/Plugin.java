@@ -18,6 +18,7 @@
 package wonderfulpanic.vinject.injector;
 
 import static wonderfulpanic.vinject.injector.VInjectLoader.DEBUG;
+import static wonderfulpanic.vinject.injector.VInjectLoader.EXPORT;
 import static wonderfulpanic.vinject.injector.VInjectLoader.out;
 import java.io.File;
 import java.lang.invoke.MethodHandle;
@@ -76,8 +77,10 @@ public class Plugin {
 	}
 	public Class<?> defineClass(ClassNode node) throws Throwable {
 		if (DEBUG)
-			out.printf("[VInject] Class %s defined in %s n", node.name, id);
+			out.printf("[VInject] Class %s defined in %s%n", node.name, id);
 		byte[] bytes = ResourceUtil.getBytes(node);
+		if (EXPORT)
+			ResourceUtil.exportClass(bytes, id, node.name);
 		return (Class<?>) defineFunction.invokeExact(bytes, 0, bytes.length);
 	}
 }

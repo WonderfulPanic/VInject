@@ -18,9 +18,8 @@
 package wonderfulpanic.vinject.injector;
 
 import static wonderfulpanic.vinject.injector.VInjectLoader.DEBUG;
+import static wonderfulpanic.vinject.injector.VInjectLoader.EXPORT;
 import static wonderfulpanic.vinject.injector.VInjectLoader.out;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -30,7 +29,6 @@ import org.objectweb.asm.tree.ClassNode;
 import wonderfulpanic.vinject.injector.util.ResourceUtil;
 
 public class VInjectClassLoader extends URLClassLoader {
-	private static final boolean EXPORT = Boolean.getBoolean("vinject.export");
 	private Transformer transformer;
 	public VInjectClassLoader(URL[] urls) throws MalformedURLException {
 		super(urls, ClassLoader.getPlatformClassLoader());
@@ -83,17 +81,8 @@ public class VInjectClassLoader extends URLClassLoader {
 		if (DEBUG)
 			out.printf("[VInject] Class %s defined in velocity%n", node.name);
 		byte[] bytes = ResourceUtil.getBytes(node);
-		if (EXPORT) {
-			File file = new File("vinject-export/velocity", node.name + ".class");
-			try {
-				file.getParentFile().mkdirs();
-				try (FileOutputStream out = new FileOutputStream(file)) {
-					out.write(bytes);
-				}
-			} catch (IOException e) {
-				throw new InternalError(e);
-			}
-		}
+		if (EXPORT)
+			ResourceUtil.exportClass(bytes, "velocity", node.name);
 		return defineClass(null, bytes, 0, bytes.length);
 	}
 	static {
