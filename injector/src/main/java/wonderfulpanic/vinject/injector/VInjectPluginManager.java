@@ -49,11 +49,12 @@ public class VInjectPluginManager {
 			if (!pluginFile.isFile() || !pluginFile.getName().endsWith(".jar"))
 				continue;
 			try (ZipFile zip = new ZipFile(pluginFile)) {
-				plugins.add(loadPlugin(loader, pluginMap, pluginFile, zip));
+				loadPlugin(loader, pluginMap, pluginFile, zip);
 			} catch (Throwable t) {
 				throw new InternalError("Caught exception loading plugin " + pluginFile.getName(), t);
 			}
 		}
+		plugins.addAll(pluginMap.values());
 	}
 	public Plugin loadPlugin(VInjectLoader loader, Map<String, Plugin> pluginMap, File pluginFile, ZipFile zip)
 		throws IOException, ClassNotFoundException {
@@ -71,7 +72,7 @@ public class VInjectPluginManager {
 		}
 		Plugin plugin = new Plugin(pluginId, pluginFile);
 		if (pluginMap.putIfAbsent(pluginId, plugin) != null) {
-			System.err.printf("[VInject] Plugin %s (%s) already exists", pluginId, pluginFile);
+			System.err.printf("[VInject] Plugin %s (%s) already exists%n", pluginId, pluginFile);
 			return null;
 		}
 		if (vinject == null)
@@ -89,7 +90,8 @@ public class VInjectPluginManager {
 		plugin.getInjectors().add(injector);
 		loader.loadInjector(plugin, required, injector);
 	}
-	public void initPlugins(VInjectLoader loader, VInjectClassLoader classLoader, Class<?> pcl) throws Throwable {
+	public MethodHandle initPlugins(VInjectLoader loader, VInjectClassLoader classLoader, Class<?> pcl)
+		throws Throwable {
 		Lookup lookup = MethodHandles.privateLookupIn(pcl, MethodHandles.lookup());
 		lookup.findStaticSetter(pcl, "vinject$velocity", Function.class)
 			.invokeExact((Function<String, Class<?>>) name -> classLoader.loadClassForPlugin(loader, name));
@@ -102,5 +104,6 @@ public class VInjectPluginManager {
 			plugin.setClassLoader((ClassLoader) instance);
 			add.invokeExact(instance);
 		}
+		return constructor;
 	}
 }

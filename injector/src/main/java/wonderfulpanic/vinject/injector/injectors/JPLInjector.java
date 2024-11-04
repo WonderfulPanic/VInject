@@ -40,8 +40,8 @@ import wonderfulpanic.vinject.injector.util.InjectUtil;
 public abstract class JPLInjector {
 	public static final String JAVA_PLUGIN_LOADER = "com/velocitypowered/proxy/plugin/loader/java/JavaPluginLoader";
 	public static ClassNode injectJPL(ClassNode node) {
-		node.visitField(ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC, "vinject$loaderFunc", "Ljava/util/function/Function;",
-			null, null);
+		node.visitField(ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC, "vinject$loaderFunc",
+			"Ljava/util/function/BiFunction;", null, null);
 		MethodNode method = InjectUtil.findMethod(node, "createPluginFromCandidate",
 			"(Lcom/velocitypowered/api/plugin/PluginDescription;)Lcom/velocitypowered/api/plugin/PluginDescription;");
 		method.access |= ACC_SYNTHETIC;
@@ -52,18 +52,21 @@ public abstract class JPLInjector {
 			if (!(insn instanceof TypeInsnNode type) || type.getOpcode() != NEW ||
 				!type.desc.contentEquals("com/velocitypowered/proxy/plugin/PluginClassLoader"))
 				continue;
-			iter.set(new FieldInsnNode(GETSTATIC, node.name, "vinject$loaderFunc", "Ljava/util/function/Function;"));
+			iter.set(new FieldInsnNode(GETSTATIC, node.name, "vinject$loaderFunc", "Ljava/util/function/BiFunction;"));
+			iter.add(new VarInsnNode(ALOAD, 1));//candidate
+			iter.add(new MethodInsnNode(INVOKEINTERFACE, "com/velocitypowered/api/plugin/PluginDescription", "getId",
+				"()Ljava/lang/String;", true));
 			while (iter.hasNext()) {
 				insn = iter.next();
-				if (insn instanceof VarInsnNode var && var.getOpcode() == ALOAD)
+				if (insn instanceof VarInsnNode var && var.getOpcode() == ALOAD)//pluginJarUrl
 					continue;
 				if (!(insn instanceof MethodInsnNode m) || m.getOpcode() != INVOKESPECIAL ||
 					!m.owner.contentEquals("com/velocitypowered/proxy/plugin/PluginClassLoader")) {
 					iter.remove();
 					continue;
 				}
-				iter.set(new MethodInsnNode(INVOKEINTERFACE, "java/util/function/Function", "apply",
-					"(Ljava/lang/Object;)Ljava/lang/Object;", true));
+				iter.set(new MethodInsnNode(INVOKEINTERFACE, "java/util/function/BiFunction", "apply",
+					"(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true));
 				iter.add(new TypeInsnNode(CHECKCAST, "com/velocitypowered/proxy/plugin/PluginClassLoader"));
 				return node;
 			}
