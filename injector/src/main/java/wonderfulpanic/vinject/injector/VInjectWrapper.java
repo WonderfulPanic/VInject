@@ -25,7 +25,7 @@ import java.util.Arrays;
 public abstract class VInjectWrapper {
 	public static void main(String[] args) throws Throwable {
 		if (args.length == 0)
-			throw new IllegalArgumentException("VInject requires to pass velocity's jar name as argument. " +
+			throw new IllegalArgumentException("VInject requires to pass velocity's jar name as first argument. " +
 				"Installation instructions can be found here: https://github.com/WonderfulPanic/VInject");
 		File velocity = new File(args[0]);
 		if (!velocity.exists())
