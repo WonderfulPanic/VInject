@@ -17,17 +17,21 @@
 
 package wonderfulpanic.vinject.injector;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.URL;
-import java.nio.file.Path;
 import java.util.Arrays;
 
 public abstract class VInjectWrapper {
 	public static void main(String[] args) throws Throwable {
-		Path path = Path.of(args[0]);
-		if (!path.toFile().exists())
-			throw new FileNotFoundException("File " + args[0] + " not found");
-		new VInjectLoader(new VInjectClassLoader(new URL[]{path.toUri().toURL()}))
+		if (args.length == 0)
+			throw new IllegalArgumentException("VInject requires to pass velocity's jar name as argument. " +
+				"Installation instructions can be found here: https://github.com/WonderfulPanic/VInject");
+		File velocity = new File(args[0]);
+		if (!velocity.exists())
+			throw new FileNotFoundException(
+				String.format("File %s (%s) not found", args[0], velocity.getAbsolutePath()));
+		new VInjectLoader(new VInjectClassLoader(new URL[]{velocity.toURI().toURL()}))
 			.load(Arrays.copyOfRange(args, 1, args.length));
 	}
 }
