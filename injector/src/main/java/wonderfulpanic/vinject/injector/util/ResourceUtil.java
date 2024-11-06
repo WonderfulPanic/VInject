@@ -84,7 +84,7 @@ public abstract class ResourceUtil {
 		return writer.toByteArray();
 	}
 	public static void exportClass(byte[] bytes, String pluginId, String name) {
-		File file = Path.of("vinject-export", pluginId, name).toFile();
+		File file = Path.of("vinject-export", pluginId, name.concat(".class")).toFile();
 		try {
 			file.getParentFile().mkdirs();
 			try (FileOutputStream out = new FileOutputStream(file)) {
