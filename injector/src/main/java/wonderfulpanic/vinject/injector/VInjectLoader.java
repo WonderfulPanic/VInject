@@ -40,6 +40,7 @@ import wonderfulpanic.vinject.injector.util.ResourceUtil;
 public class VInjectLoader {
 	public static final boolean EXPORT = Boolean.getBoolean("vinject.export");
 	public static final boolean DEBUG = Boolean.getBoolean("vinject.debug");
+	public static final boolean FORCE_LOAD = Boolean.getBoolean("vinject.forceload");
 	public static final String VERSION = "1.0.0";
 	public static final PrintStream out = DEBUG ? System.out : null;
 	private final VInjectClassLoader loader;
@@ -84,6 +85,24 @@ public class VInjectLoader {
 			return null;
 		});
 		hookJPL(loadJavaPluginLoader());
+		if (FORCE_LOAD) {
+			boolean errored = false;
+			if (DEBUG)
+				out.println("[VInject] Force loading all injectors");
+			for (String name : injectorsByClassName.keySet().toArray(String[]::new)) {
+				try {
+					loader.loadClass(name);
+				} catch (Throwable t) {
+					System.err.printf("[VInject] Exception thrown while force loading class %s%n", name);
+					t.printStackTrace();
+					errored = true;
+				}
+			}
+			if (errored) {
+				System.err.println("[VInject] Exceptions encountered while force loading classes, exiting");
+				System.exit(0);
+			}
+		}
 		PrintStream err = System.err;
 		Thread.currentThread().setContextClassLoader(loader);
 		try {
