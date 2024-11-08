@@ -17,6 +17,7 @@
 
 package wonderfulpanic.vinject.injector;
 
+import static wonderfulpanic.vinject.injector.VInjectLoader.VERSION;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.URL;
@@ -24,8 +25,9 @@ import java.util.Arrays;
 
 public abstract class VInjectWrapper {
 	public static void main(String[] args) throws Throwable {
+		System.out.println("[VInject] VInject version " + VERSION);
 		if (args.length == 0)
-			throw new IllegalArgumentException("VInject requires to pass velocity's jar name as first argument. " +
+			throw new IllegalArgumentException("VInject requires to pass velocity's jar name as argument. " +
 				"Installation instructions can be found here: https://github.com/WonderfulPanic/VInject");
 		File velocity = new File(args[0]);
 		if (!velocity.exists())

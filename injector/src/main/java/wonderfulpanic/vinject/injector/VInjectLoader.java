@@ -54,6 +54,7 @@ public class VInjectLoader {
 	public void load(String[] args) throws Throwable {
 		pluginManager.loadPlugins(this);
 		classLoaderConstructor = pluginManager.initPlugins(this, loader, loadPluginClassLoader());
+		System.out.printf("[VInject] Loaded %d plugins%n", pluginManager.countVInjectPlugins());
 		loader.setTransformer(name -> {
 			String path = ResourceUtil.asPath(name) + ".class";
 			if (loader.getParent().getResource(path) != null)
@@ -100,7 +101,7 @@ public class VInjectLoader {
 			}
 			if (errored) {
 				System.err.println("[VInject] Exceptions encountered while force loading classes, exiting");
-				System.exit(0);
+				return;
 			}
 		}
 		PrintStream err = System.err;

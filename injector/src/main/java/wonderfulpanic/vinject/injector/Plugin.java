@@ -30,14 +30,16 @@ import org.objectweb.asm.tree.ClassNode;
 import wonderfulpanic.vinject.injector.util.ResourceUtil;
 
 public class Plugin {
-	private final File file;
 	private final String id;
+	private final File file;
+	private final boolean isVInject;
 	private List<ClassNode> injectors = new LinkedList<>();
 	private ClassLoader loader;
 	private MethodHandle defineFunction;
-	public Plugin(String id, File file) {
+	public Plugin(String id, File file, boolean isVInject) {
 		this.id = id;
 		this.file = file;
+		this.isVInject = isVInject;
 	}
 	@Override
 	public String toString() {
@@ -57,6 +59,9 @@ public class Plugin {
 	}
 	public File getPluginFile() {
 		return file;
+	}
+	public boolean isVInjectPlugin() {
+		return isVInject;
 	}
 	public List<ClassNode> getInjectors() {
 		return injectors;

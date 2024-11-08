@@ -70,7 +70,7 @@ public class VInjectPluginManager {
 				throw new IllegalArgumentException(
 					"Found vinject-plugin.json but velocity-plugin.json does not contain plugin id");
 		}
-		Plugin plugin = new Plugin(pluginId, pluginFile);
+		Plugin plugin = new Plugin(pluginId, pluginFile, vinject != null);
 		if (pluginMap.putIfAbsent(pluginId, plugin) != null) {
 			System.err.printf("[VInject] Plugin %s (%s) already exists%n", pluginId, pluginFile);
 			return null;
@@ -105,5 +105,12 @@ public class VInjectPluginManager {
 			add.invokeExact(instance);
 		}
 		return constructor;
+	}
+	public int countVInjectPlugins() {
+		int count = 0;
+		for (Plugin plugin : plugins)
+			if (plugin.isVInjectPlugin())
+				count++;
+		return count;
 	}
 }
