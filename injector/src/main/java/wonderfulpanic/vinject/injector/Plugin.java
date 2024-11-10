@@ -21,9 +21,6 @@ import static wonderfulpanic.vinject.injector.VInjectLoader.DEBUG;
 import static wonderfulpanic.vinject.injector.VInjectLoader.EXPORT;
 import static wonderfulpanic.vinject.injector.VInjectLoader.out;
 import java.io.File;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.LinkedList;
 import java.util.List;
 import org.objectweb.asm.tree.ClassNode;
@@ -35,7 +32,6 @@ public class Plugin {
 	private final boolean isVInject;
 	private List<ClassNode> injectors = new LinkedList<>();
 	private ClassLoader loader;
-	private MethodHandle defineFunction;
 	public Plugin(String id, File file, boolean isVInject) {
 		this.id = id;
 		this.file = file;
@@ -68,24 +64,17 @@ public class Plugin {
 	}
 	public Plugin setClassLoader(ClassLoader loader) throws NoSuchMethodException, IllegalAccessException {
 		this.loader = loader;
-		if (loader == null)
-			defineFunction = null;
-		else
-			defineFunction = MethodHandles
-				.privateLookupIn(loader.getClass(), MethodHandles.lookup()).findVirtual(loader.getClass(),
-					"defineClass", MethodType.methodType(Class.class, byte[].class, int.class, int.class))
-				.bindTo(loader);
 		return this;
 	}
 	public ClassLoader getClassLoader() {
 		return loader;
 	}
-	public Class<?> defineClass(ClassNode node) throws Throwable {
+	public Class<?> defineClass(ClassNode node) {
 		if (DEBUG)
 			out.printf("[VInject] Class %s defined in %s%n", node.name, id);
 		byte[] bytes = ResourceUtil.getBytes(node);
 		if (EXPORT)
 			ResourceUtil.exportClass(bytes, id, node.name);
-		return (Class<?>) defineFunction.invokeExact(bytes, 0, bytes.length);
+		return ((InternalClassLoader) loader).vinject$defineClass(bytes);
 	}
 }

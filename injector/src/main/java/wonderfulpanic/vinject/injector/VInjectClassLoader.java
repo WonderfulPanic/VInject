@@ -20,62 +20,101 @@ package wonderfulpanic.vinject.injector;
 import static wonderfulpanic.vinject.injector.VInjectLoader.DEBUG;
 import static wonderfulpanic.vinject.injector.VInjectLoader.EXPORT;
 import static wonderfulpanic.vinject.injector.VInjectLoader.out;
-import java.io.IOException;
-import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import org.objectweb.asm.tree.ClassNode;
 import wonderfulpanic.vinject.injector.util.ResourceUtil;
 
-public class VInjectClassLoader extends URLClassLoader {
-	private Transformer transformer;
-	public VInjectClassLoader(URL[] urls) throws MalformedURLException {
+public class VInjectClassLoader extends URLClassLoader implements InternalClassLoader {
+	private final VInjectLoader loader;
+	private boolean classLoading;
+	public VInjectClassLoader(VInjectLoader loader, URL[] urls) throws MalformedURLException {
 		super(urls, ClassLoader.getPlatformClassLoader());
+		this.loader = loader;
 	}
 	@Override
-	public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-		synchronized (getClassLoadingLock(name)) {
-			Class<?> cl = findLoadedClass(name);
-			if (cl != null)
-				return cl;
-			cl = transformer.load(name);
-			if (cl != null)
-				return cl;
-			return super.loadClass(name, resolve);
+	public URL getResource(String name) {
+		URL url = super.findResource(name);
+		if (url != null)
+			return url;
+		for (Plugin plugin : loader.getPluginManager().getPlugins()) {
+			url = ((InternalClassLoader) plugin.getClassLoader()).vinject$getResource(name);
+			if (url != null)
+				return url;
 		}
+		return null;
 	}
-	protected Class<?> loadClassForPlugin(VInjectLoader loader, String name) {
+	@Override
+	public Class<?> loadClass(String name, boolean ignore) throws ClassNotFoundException {
 		synchronized (getClassLoadingLock(name)) {
 			Class<?> cl = findLoadedClass(name);
 			if (cl != null)
 				return cl;
-			try {
-				String path = ResourceUtil.asPath(name) + ".class";
-				if (getParent().getResource(path) != null)
-					return super.loadClass(name, false);
-				if (DEBUG)
-					out.printf("[VInject] Searching class %s for plugin%n", name);
-				try (InputStream in = getResourceAsStream(path)) {
-					if (in == null)
-						return super.loadClass(name, false);
-					if (loader.containsInjector(name))
-						return defineClass(loader.applyInjectors(ResourceUtil.getNode(in)));
-					else
-						return super.loadClass(name, false);
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-				return super.loadClass(name, false);
-			} catch (ClassNotFoundException e) {
-				return null;
+			String path = ResourceUtil.addClassExt(ResourceUtil.asPath(name));
+			if (ClassLoader.getPlatformClassLoader().getResource(path) != null)
+				return ClassLoader.getPlatformClassLoader().loadClass(name);
+			if (!classLoading) {
+				if (name.contentEquals(InternalClassLoader.class.getName()))
+					return InternalClassLoader.class;
+				throw new ClassNotFoundException(name);
 			}
+			URL url = super.getResource(path);
+			if (url != null) {
+				if (!loader.containsInjector(name))
+					return super.loadClass(name, false);
+				return defineClass(loader.applyInjectors(ResourceUtil.getNode(url)));
+			}
+			for (Plugin plugin : loader.getPluginManager().getPlugins()) {
+				InternalClassLoader accessor = (InternalClassLoader) plugin.getClassLoader();
+				url = accessor.vinject$getResource(path);
+				if (url == null)
+					continue;
+				if (DEBUG)
+					out.printf("[VInject] Found class %s for velocity in plugin: %s%n", name, plugin.id());
+				if (!loader.containsInjector(name))
+					return accessor.vinject$loadClass(name);
+				return plugin.defineClass(loader.applyInjectors(ResourceUtil.getNode(url)));
+			}
+			throw new ClassNotFoundException(name);
 		}
 	}
-	public void setTransformer(Transformer t0) {
-		if (t0 == null)
-			throw new NullPointerException("transformer");
-		transformer = t0;
+	@Override
+	public Class<?> vinject$loadClass(String name) throws ClassNotFoundException {
+		synchronized (getClassLoadingLock(name)) {
+			Class<?> cl = findLoadedClass(name);
+			if (cl != null)
+				return cl;
+			String path = ResourceUtil.addClassExt(ResourceUtil.asPath(name));
+			if (ClassLoader.getPlatformClassLoader().getResource(path) != null)
+				return ClassLoader.getPlatformClassLoader().loadClass(name);
+			if (DEBUG)
+				out.printf("[VInject] Searching class %s for plugin%n", name);
+			URL url = super.getResource(path);
+			if (url == null)
+				return null;
+			if (!loader.containsInjector(name))
+				return super.loadClass(name, false);
+			return defineClass(loader.applyInjectors(ResourceUtil.getNode(url)));
+		}
+	}
+	@Override
+	public URL vinject$getResource(String name) {
+		return super.getResource(name);
+	}
+	@Override
+	public void vinject$addToClassloaders() {
+		throw new UnsupportedOperationException();
+	}
+	@Override
+	public Class<?> vinject$defineClass(byte[] bytes) {
+		throw new UnsupportedOperationException();
+	}
+	public void enableClassLoading() {
+		classLoading = true;
+	}
+	public void disableClassLoading() {
+		classLoading = false;
 	}
 	public Class<?> defineClass(ClassNode node) {
 		if (DEBUG)
@@ -87,9 +126,5 @@ public class VInjectClassLoader extends URLClassLoader {
 	}
 	static {
 		ClassLoader.registerAsParallelCapable();
-	}
-	@FunctionalInterface
-	public static interface Transformer {
-		public Class<?> load(String name) throws ClassNotFoundException;
 	}
 }

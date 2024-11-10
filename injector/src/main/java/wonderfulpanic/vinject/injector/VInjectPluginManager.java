@@ -20,15 +20,11 @@ package wonderfulpanic.vinject.injector;
 import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodHandles.Lookup;
-import java.lang.invoke.MethodType;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.zip.ZipFile;
 import org.objectweb.asm.tree.ClassNode;
 import com.google.gson.JsonElement;
@@ -90,21 +86,14 @@ public class VInjectPluginManager {
 		plugin.getInjectors().add(injector);
 		loader.loadInjector(plugin, required, injector);
 	}
-	public MethodHandle initPlugins(VInjectLoader loader, VInjectClassLoader classLoader, Class<?> pcl)
-		throws Throwable {
-		Lookup lookup = MethodHandles.privateLookupIn(pcl, MethodHandles.lookup());
-		lookup.findStaticSetter(pcl, "vinject$velocity", Function.class)
-			.invokeExact((Function<String, Class<?>>) name -> classLoader.loadClassForPlugin(loader, name));
-		MethodHandle constructor = lookup.findConstructor(pcl, MethodType.methodType(void.class, URL[].class))
-			.asType(MethodType.methodType(Object.class, URL[].class));
-		MethodHandle add = lookup.findVirtual(pcl, "addToClassloaders", MethodType.methodType(void.class))
-			.asType(MethodType.methodType(void.class, Object.class));
+	public VInjectPluginManager initPlugins(VInjectLoader loader, VInjectClassLoader classLoader,
+		MethodHandle constructor) throws Throwable {
 		for (Plugin plugin : plugins) {
 			Object instance = constructor.invokeExact(new URL[]{plugin.getPluginFile().toURI().toURL()});
 			plugin.setClassLoader((ClassLoader) instance);
-			add.invokeExact(instance);
+			((InternalClassLoader) instance).vinject$addToClassloaders();
 		}
-		return constructor;
+		return this;
 	}
 	public int countVInjectPlugins() {
 		int count = 0;

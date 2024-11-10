@@ -27,13 +27,12 @@ public abstract class VInjectWrapper {
 	public static void main(String[] args) throws Throwable {
 		System.out.println("[VInject] VInject version " + VERSION);
 		if (args.length == 0)
-			throw new IllegalArgumentException("VInject requires to pass velocity's jar name as argument. " +
+			throw new IllegalArgumentException("VInject requires to pass velocity's jar name as first argument. " +
 				"Installation instructions can be found here: https://github.com/WonderfulPanic/VInject");
 		File velocity = new File(args[0]);
 		if (!velocity.exists())
 			throw new FileNotFoundException(
 				String.format("File %s (%s) not found", args[0], velocity.getAbsolutePath()));
-		new VInjectLoader(new VInjectClassLoader(new URL[]{velocity.toURI().toURL()}))
-			.load(Arrays.copyOfRange(args, 1, args.length));
+		new VInjectLoader(new URL[]{velocity.toURI().toURL()}).load(Arrays.copyOfRange(args, 1, args.length));
 	}
 }

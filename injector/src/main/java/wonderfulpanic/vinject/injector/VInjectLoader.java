@@ -17,12 +17,12 @@
 
 package wonderfulpanic.vinject.injector;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodHandles.Lookup;
 import java.lang.invoke.MethodType;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -43,49 +43,28 @@ public class VInjectLoader {
 	public static final boolean FORCE_LOAD = Boolean.getBoolean("vinject.forceload");
 	public static final String VERSION = "1.0.0";
 	public static final PrintStream out = DEBUG ? System.out : null;
-	private final VInjectClassLoader loader;
-	private final VInjectPluginManager pluginManager = new VInjectPluginManager();
 	private final Map<String, List<ClassNode>> injectorsByClassName = new HashMap<>();
 	private final Set<ClassNode> unrequired = new HashSet<>();
+	private VInjectClassLoader loader;
+	private VInjectPluginManager pluginManager;
 	private MethodHandle classLoaderConstructor;
-	public VInjectLoader(VInjectClassLoader loader) {
+	public VInjectLoader(URL[] url) throws MalformedURLException {
+		loader = new VInjectClassLoader(this, url);
+		pluginManager = new VInjectPluginManager();
+	}
+	public VInjectLoader(VInjectClassLoader loader, VInjectPluginManager pluginManager) {
 		this.loader = loader;
+		this.pluginManager = pluginManager;
+	}
+	public VInjectLoader() {
+		
 	}
 	public void load(String[] args) throws Throwable {
 		pluginManager.loadPlugins(this);
-		classLoaderConstructor = pluginManager.initPlugins(this, loader, loadPluginClassLoader());
+		loadPluginClassLoader();
+		pluginManager.initPlugins(this, loader, classLoaderConstructor);
 		System.out.printf("[VInject] Loaded %d plugins%n", pluginManager.countVInjectPlugins());
-		loader.setTransformer(name -> {
-			String path = ResourceUtil.asPath(name) + ".class";
-			if (loader.getParent().getResource(path) != null)
-				return null;
-			try (InputStream in = loader.getResourceAsStream(path)) {
-				if (in != null) {
-					if (injectorsByClassName.containsKey(name))
-						return loader.defineClass(applyInjectors(ResourceUtil.getNode(in)));
-					else
-						return null;
-				}
-			} catch (IOException e) {
-				throw new ClassNotFoundException(name, e);
-			}
-			for (Plugin plugin : pluginManager.getPlugins()) {
-				try (InputStream in = plugin.getClassLoader().getResourceAsStream(path)) {
-					if (in == null)
-						continue;
-					if (DEBUG)
-						out.printf("[VInject] Found class %s for velocity in plugin: %s%n", name, plugin.id());
-					if (injectorsByClassName.containsKey(name))
-						return plugin.defineClass(applyInjectors(ResourceUtil.getNode(in)));
-					else
-						return plugin.getClassLoader().loadClass(name);
-				} catch (Throwable e) {
-					throw new ClassNotFoundException(name, e);
-				}
-			}
-			return null;
-		});
-		hookJPL(loadJavaPluginLoader());
+		loadJavaPluginLoader();
 		if (FORCE_LOAD) {
 			boolean errored = false;
 			if (DEBUG)
@@ -122,11 +101,6 @@ public class VInjectLoader {
 		InjectUtil.getClasses(injector,
 			path -> getList(injectorsByClassName, ResourceUtil.asValidName(path)).add(injector));
 	}
-	public void hookJPL(Class<?> jpl) throws Throwable {
-		MethodHandles.privateLookupIn(jpl, MethodHandles.lookup())
-			.findStaticSetter(jpl, "vinject$loaderFunc", BiFunction.class)
-			.invokeExact((BiFunction<String, URL, Object>) this::getLoader);
-	}
 	public ClassLoader getLoader(String id, URL url) {
 		for (Plugin plugin : pluginManager.getPlugins())
 			if (plugin.id().contentEquals(id))
@@ -137,14 +111,25 @@ public class VInjectLoader {
 			throw new InternalError(e);
 		}
 	}
-	public Class<?> loadPluginClassLoader() throws IOException, ClassNotFoundException {
-		loader.setTransformer(ClassLoader.getPlatformClassLoader()::loadClass);
-		return loader.defineClass(
+	public Class<?> loadPluginClassLoader() throws Throwable {
+		loader.disableClassLoading();
+		Class<?> pcl = loader.defineClass(
 			applyInjectors(PCLInjector.injectPCL(ResourceUtil.loadNode(loader, PCLInjector.PLUGIN_CLASS_LOADER))));
+		Lookup lookup = MethodHandles.privateLookupIn(pcl, MethodHandles.lookup());
+		lookup.findStaticSetter(pcl, "vinject$velocity", InternalClassLoader.class)
+			.invokeExact((InternalClassLoader) loader);
+		classLoaderConstructor = lookup.findConstructor(pcl, MethodType.methodType(void.class, URL[].class))
+			.asType(MethodType.methodType(Object.class, URL[].class));
+		return pcl;
 	}
-	public Class<?> loadJavaPluginLoader() throws IOException, ClassNotFoundException {
-		return loader.defineClass(
+	public Class<?> loadJavaPluginLoader() throws Throwable {
+		loader.enableClassLoading();
+		Class<?> jpl = loader.defineClass(
 			applyInjectors(JPLInjector.injectJPL(ResourceUtil.loadNode(loader, JPLInjector.JAVA_PLUGIN_LOADER))));
+		MethodHandles.privateLookupIn(jpl, MethodHandles.lookup())
+			.findStaticSetter(jpl, "vinject$loaderFunc", BiFunction.class)
+			.invokeExact((BiFunction<String, URL, Object>) this::getLoader);
+		return jpl;
 	}
 	public ClassNode applyInjectors(ClassNode node) {
 		if (DEBUG)
@@ -156,6 +141,20 @@ public class VInjectLoader {
 	}
 	public boolean containsInjector(String name) {
 		return injectorsByClassName.containsKey(name);
+	}
+	public VInjectLoader setClassLoader(VInjectClassLoader loader) {
+		this.loader = loader;
+		return this;
+	}
+	public VInjectClassLoader getClassLoader() {
+		return loader;
+	}
+	public VInjectLoader setPluginManager(VInjectPluginManager pluginManager) {
+		this.pluginManager = pluginManager;
+		return this;
+	}
+	public VInjectPluginManager getPluginManager() {
+		return pluginManager;
 	}
 	public static <K, V> List<V> getList(Map<K, List<V>> map, K key) {
 		return map.computeIfAbsent(key, k -> new LinkedList<>());
