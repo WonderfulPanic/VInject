@@ -22,6 +22,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
@@ -48,29 +49,40 @@ public abstract class ResourceUtil {
 			return new Manifest(in);
 		}
 	}
-	public static ClassNode loadNode(ZipFile zip, String path) throws IOException, ClassNotFoundException {
+	public static ClassNode loadNode(ZipFile zip, String path) throws ClassNotFoundException {
 		ClassNode node = getNode(zip, path);
 		if (node == null)
 			throw new ClassNotFoundException(asValidName(path));
 		return node;
 	}
-	public static ClassNode loadNode(ClassLoader loader, String path) throws IOException, ClassNotFoundException {
+	public static ClassNode loadNode(ClassLoader loader, String path) throws ClassNotFoundException {
 		ClassNode node = getNode(loader, path);
 		if (node == null)
 			throw new ClassNotFoundException(asValidName(path));
 		return node;
 	}
-	public static ClassNode getNode(ZipFile zip, String path) throws IOException {
-		ZipEntry entry = zip.getEntry(path.concat(".class"));
+	public static ClassNode getNode(ZipFile zip, String path) throws ClassNotFoundException {
+		ZipEntry entry = zip.getEntry(addClassExt(path));
 		if (entry == null)
 			return null;
 		try (InputStream in = zip.getInputStream(entry)) {
 			return getNode(in);
+		} catch (IOException e) {
+			throw new ClassNotFoundException(asValidName(path), e);
 		}
 	}
-	public static ClassNode getNode(ClassLoader loader, String path) throws IOException {
-		try (InputStream in = loader.getResourceAsStream(path.concat(".class"))) {
+	public static ClassNode getNode(ClassLoader loader, String path) throws ClassNotFoundException {
+		try (InputStream in = loader.getResourceAsStream(addClassExt(path))) {
 			return in == null ? null : getNode(in);
+		} catch (IOException e) {
+			throw new ClassNotFoundException(asValidName(path), e);
+		}
+	}
+	public static ClassNode getNode(URL url) throws ClassNotFoundException {
+		try (InputStream in = url.openStream()) {
+			return getNode(in);
+		} catch (IOException e) {
+			throw new ClassNotFoundException(url.toString(), e);
 		}
 	}
 	public static ClassNode getNode(InputStream in) throws IOException {
@@ -84,14 +96,14 @@ public abstract class ResourceUtil {
 		return writer.toByteArray();
 	}
 	public static void exportClass(byte[] bytes, String pluginId, String name) {
-		File file = Path.of("vinject-export", pluginId, name.concat(".class")).toFile();
+		File file = Path.of("vinject-export", pluginId, addClassExt(name)).toFile();
 		try {
 			file.getParentFile().mkdirs();
 			try (FileOutputStream out = new FileOutputStream(file)) {
 				out.write(bytes);
 			}
 		} catch (IOException e) {
-			throw new InternalError(e);
+			e.printStackTrace();
 		}
 	}
 	public static String asValidPath(String name) {
@@ -115,5 +127,8 @@ public abstract class ResourceUtil {
 		if (name.contains("/"))
 			throw new IllegalArgumentException("Class name should not contain slashes: ".concat(name));
 		return name;
+	}
+	public static String addClassExt(String path) {
+		return path.concat(".class");
 	}
 }

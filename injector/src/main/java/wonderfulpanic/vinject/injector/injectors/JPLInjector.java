@@ -71,6 +71,6 @@ public abstract class JPLInjector {
 				return node;
 			}
 		}
-		throw new InternalError("Could not hook up JavaPluginLoader");
+		throw new InternalError("JavaPluginLoader has invalid createPluginFromCandidate method");
 	}
 }

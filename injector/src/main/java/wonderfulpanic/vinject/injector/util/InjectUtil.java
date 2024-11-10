@@ -24,6 +24,7 @@ import static org.objectweb.asm.Opcodes.IRETURN;
 import static org.objectweb.asm.Opcodes.RETURN;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Type;
@@ -38,12 +39,14 @@ import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.InvokeDynamicInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 
 public abstract class InjectUtil {
 	private static final Pattern lambdaPattern = Pattern.compile("^lambda\\$.*\\d+$");
-	private static final String INJECTOR = "Lwonderfulpanic/vinject/api/Injector;";
-	private static final String SHADOW = "Lwonderfulpanic/vinject/api/Shadow;";
-	private static final String OVERWRITE = "Lwonderfulpanic/vinject/api/Overwrite;";
+	private static final String BASE = "Lwonderfulpanic/vinject/api/";
+	private static final String INJECTOR = BASE + "Injector;";
+	private static final String SHADOW = BASE + "Shadow;";
+	private static final String OVERWRITE = BASE + "Overwrite;";
 	public static void getClasses(ClassNode node, Consumer<String> consumer) {
 		List<Object> attr = getAnnotation(node.invisibleAnnotations, INJECTOR).values;
 		for (int i = 0; i < attr.size(); i += 2)
@@ -63,76 +66,83 @@ public abstract class InjectUtil {
 		for(int i=0;i<attr.size();i+=2)
 			consumer.accept((String)attr.get(i),attr.get(i|1));
 	}*/
-	public static ClassNode modifyTemplate(ClassNode node, ClassNode template) {
-		String simpleName = template.name.substring(template.name.lastIndexOf('/') + 1, template.name.length());
-		template.fields.forEach(field -> {
-			if (findAnnotation(field.invisibleAnnotations, SHADOW)) {
-				FieldNode src = findField(node, field.name);
-				validate(src == null, node, field, "Field not found");
-				validate(((src.access ^ field.access) & ACC_STATIC) != 0, node, field, "Field access flags differs");
-				validate(!src.desc.contentEquals(field.desc), node, field, "Field desc differs");
+	public static ClassNode modifyTemplate(ClassNode target, ClassNode template) {
+		target.interfaces.addAll(template.interfaces);
+		for (FieldNode field : template.fields) {
+			if (hasAnnotation(field.invisibleAnnotations, SHADOW)) {
+				FieldNode targetField = findField(target, field.name);
+				validate(targetField == null, target, field, "not found");
+				validate(((targetField.access ^ field.access) & ACC_STATIC) != 0, target, field,
+					"has different static access");
+				validate(!targetField.desc.contentEquals(field.desc), target, field, "has different type");
 			} else {
-				validate(findField(node, field.name) != null, node, field, "Field already exists");
-				node.fields.add(field);
+				validate(findField(target, field.name) != null, target, field, "already exists");
+				target.fields.add(field);
 			}
-		});
-		template.methods.forEach(method -> {
-			MethodNode src = findMethod(node, method.name, method.desc);
-			if (findAnnotation(method.invisibleAnnotations, SHADOW)) {
-				validate(src == null, node, method, "Method not found");
-				return;
+		}
+		String simpleName = template.name.substring(template.name.lastIndexOf('/') + 1, template.name.length());
+		for (MethodNode method : template.methods) {
+			MethodNode targetMethod = findMethod(target, method.name, method.desc.replace(template.name, target.name));
+			if (hasAnnotation(method.invisibleAnnotations, SHADOW)) {
+				validate(targetMethod == null, target, method, "Method not found");
+				continue;
 			}
-			method.instructions.forEach(insn -> {
-				if (insn instanceof FieldInsnNode field) {
-					if (field.owner.contentEquals(template.name))
-						field.owner = node.name;
-				} else if (insn instanceof MethodInsnNode methodInsn) {
-					if (methodInsn.owner.contentEquals(template.name))
-						methodInsn.owner = node.name;
-				} else if (insn instanceof InvokeDynamicInsnNode invoke) {
-					if (invoke.bsm.getName().contentEquals("metafactory") &&
-						invoke.bsmArgs[1] instanceof Handle handle &&
-						lambdaPattern.matcher(handle.getName()).matches()) {
-						invoke.desc = invoke.desc.replace(template.name, node.name);
-						invoke.bsmArgs[1] = new Handle(handle.getTag(), node.name, simpleName + "$" + handle.getName(),
-							handle.getDesc(), handle.isInterface());
-					}
-				} else if (insn instanceof FrameNode frame && frame.local != null)
-					frame.local.replaceAll(obj -> template.name.equals(obj) ? node.name : obj);
-			});
-			if (findAnnotation(method.invisibleAnnotations, OVERWRITE)) {
-				validate(src == null, node, method, "Method not found");
-				src.instructions = method.instructions;
-				//removeLineNumbers(method.instructions);
-				//node.methods.remove(src);
-				//node.methods.add(method);
+			setMethodOwner(method, template.name, target.name, name -> simpleName + "$" + name);
+			if (hasAnnotation(method.invisibleAnnotations, OVERWRITE)) {
+				validate(targetMethod == null, target, method, "Method not found");
+				targetMethod.instructions = method.instructions;
 			} else if (method.name.contentEquals("<init>")) {
-				validate(src == null && !method.desc.contentEquals("()V"), node,
+				validate(targetMethod == null && !method.desc.contentEquals("()V"), target,
 					"Only empty or similar constructors are allowed", method.desc);
 				removeSuperConstructor(method.instructions);
-				forEachConstructor(node, m2 -> appendToConstructor(m2.instructions, method.instructions));
+				forEachConstructor(target, m2 -> appendToConstructor(m2.instructions, method.instructions));
 			} else if (method.name.contentEquals("<clinit>")) {
-				if (src == null)
-					node.methods.add(method);
+				if (targetMethod == null)
+					target.methods.add(method);
 				else
-					appendToConstructor(src.instructions, method.instructions);
+					appendToConstructor(targetMethod.instructions, method.instructions);
 			} else if ((method.access & ACC_SYNTHETIC) == ACC_SYNTHETIC &&
 				lambdaPattern.matcher(method.name).matches()) {
-				validate(src != null, node, method, "Lambda method already exists");
+				validate(targetMethod != null, target, method, "Lambda method already exists");
 				method.name = simpleName + "$" + method.name;
 				if (method.localVariables != null)
 					method.localVariables.forEach(var -> {
 						if (var.desc.regionMatches(1, template.name, 0, template.name.length()))
-							var.desc = 'L' + node.name + ';';
+							var.desc = 'L' + target.name + ';';
 					});
-				node.methods.add(method);
+				target.methods.add(method);
 			} else {
-				validate(src != null, node, method, "Method already exists");
-				node.methods.add(method);
+				validate(targetMethod != null, target, method, "Method already exists");
+				target.methods.add(method);
 			}
-		});
-		node.interfaces.addAll(template.interfaces);
-		return node;
+		}
+		return target;
+	}
+	public static MethodNode setMethodOwner(MethodNode target, String from, String to,
+		Function<String, String> lambdaRenamer) {
+		for (AbstractInsnNode insn : target.instructions) {
+			if (insn instanceof TypeInsnNode type) {
+				if (type.desc.contentEquals(from))
+					type.desc = to;
+			} else if (insn instanceof FieldInsnNode field) {
+				if (field.owner.contentEquals(from))
+					field.owner = to;
+			} else if (insn instanceof MethodInsnNode method) {
+				if (method.owner.contentEquals(from))
+					method.owner = to;
+			} else if (insn instanceof InvokeDynamicInsnNode invoke) {
+				if (invoke.bsm.getOwner().contentEquals("java/lang/invoke/LambdaMetafactory") &&
+					invoke.bsm.getName().contentEquals("metafactory") &&
+					invoke.bsmArgs[1] instanceof Handle handle &&
+					lambdaPattern.matcher(handle.getName()).matches()) {
+					invoke.desc = invoke.desc.replace(from, to);
+					invoke.bsmArgs[1] = new Handle(handle.getTag(), to, lambdaRenamer.apply(handle.getName()),
+						handle.getDesc(), handle.isInterface());
+				}
+			} else if (insn instanceof FrameNode frame && frame.local != null)
+				frame.local.replaceAll(obj -> from.equals(obj) ? to : obj);
+		}
+		return target;
 	}
 	public static void validate(boolean expression, ClassNode node, Object subject, String desc) {
 		if (!expression)
@@ -141,7 +151,7 @@ public abstract class InjectUtil {
 		if (subject instanceof MethodNode method)
 			throw new IllegalStateException(err + " (" + method.name + "/" + method.desc + ")");
 		else if (subject instanceof FieldNode field)
-			throw new IllegalStateException(err + " (" + field.name + "/" + field.desc + ")");
+			throw new IllegalStateException("Target field " + err + " (" + field.name + "/" + field.desc + ")");
 		else
 			throw new IllegalArgumentException("Unknown subject: " + subject);
 	}
@@ -202,7 +212,7 @@ public abstract class InjectUtil {
 				return method;
 		return null;
 	}
-	public static boolean findAnnotation(List<AnnotationNode> list, String desc) {
+	public static boolean hasAnnotation(List<AnnotationNode> list, String desc) {
 		return getAnnotation(list, desc) != null;
 	}
 	public static AnnotationNode getAnnotation(List<AnnotationNode> list, String desc) {
