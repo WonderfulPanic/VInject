@@ -74,7 +74,7 @@ public class VInjectClassLoader extends URLClassLoader implements InternalClassL
 					out.printf("[VInject] Found class %s for velocity in plugin: %s%n", name, plugin.id());
 				if (!loader.containsInjector(name))
 					return accessor.vinject$loadClass(name);
-				return plugin.defineClass(loader.applyInjectors(ResourceUtil.getNode(url)));
+				return defineClassInPlugin(plugin, loader.applyInjectors(ResourceUtil.getNode(url)));
 			}
 			throw new ClassNotFoundException(name);
 		}
@@ -123,6 +123,14 @@ public class VInjectClassLoader extends URLClassLoader implements InternalClassL
 		if (EXPORT)
 			ResourceUtil.exportClass(bytes, "velocity", node.name);
 		return defineClass(null, bytes, 0, bytes.length);
+	}
+	public static Class<?> defineClassInPlugin(Plugin plugin, ClassNode node) {
+		if (DEBUG)
+			out.printf("[VInject] Class %s defined in %s%n", node.name, plugin.id());
+		byte[] bytes = ResourceUtil.getBytes(node);
+		if (EXPORT)
+			ResourceUtil.exportClass(bytes, plugin.id(), node.name);
+		return ((InternalClassLoader) plugin.getClassLoader()).vinject$defineClass(bytes);
 	}
 	static {
 		ClassLoader.registerAsParallelCapable();
