@@ -17,6 +17,9 @@
 
 package wonderfulpanic.vinject.injector;
 
+import static wonderfulpanic.vinject.injector.VInjectLoader.DEBUG;
+import static wonderfulpanic.vinject.injector.VInjectLoader.out;
+
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -106,24 +109,29 @@ public class VInjectLoader {
 			if (plugin.id().contentEquals(id))
 				return plugin.getClassLoader();
 		try {
-			return (ClassLoader) classLoaderConstructor.invokeExact(new URL[]{url});
+			return (ClassLoader) classLoaderConstructor.invokeExact(new URL[]{url}, id);
 		} catch (Throwable e) {
 			throw new InternalError(e);
 		}
 	}
 	public Class<?> loadPluginClassLoader() throws Throwable {
 		loader.disableClassLoading();
+		if (DEBUG)
+			out.println("[VInject] [velocity] Applying injectors to: " + PCLInjector.PLUGIN_CLASS_LOADER);
 		Class<?> pcl = loader.defineClass(
 			applyInjectors(PCLInjector.injectPCL(ResourceUtil.loadNode(loader, PCLInjector.PLUGIN_CLASS_LOADER))));
 		Lookup lookup = MethodHandles.privateLookupIn(pcl, MethodHandles.lookup());
 		lookup.findStaticSetter(pcl, "vinject$velocity", InternalClassLoader.class)
 			.invokeExact((InternalClassLoader) loader);
-		classLoaderConstructor = lookup.findConstructor(pcl, MethodType.methodType(void.class, URL[].class))
-			.asType(MethodType.methodType(Object.class, URL[].class));
+		classLoaderConstructor = lookup
+			.findConstructor(pcl, MethodType.methodType(void.class, URL[].class, String.class))
+			.asType(MethodType.methodType(ClassLoader.class, URL[].class, String.class));
 		return pcl;
 	}
 	public Class<?> loadJavaPluginLoader() throws Throwable {
 		loader.enableClassLoading();
+		if (DEBUG)
+			out.println("[VInject] [velocity] Applying injectors to: " + JPLInjector.JAVA_PLUGIN_LOADER);
 		Class<?> jpl = loader.defineClass(
 			applyInjectors(JPLInjector.injectJPL(ResourceUtil.loadNode(loader, JPLInjector.JAVA_PLUGIN_LOADER))));
 		MethodHandles.privateLookupIn(jpl, MethodHandles.lookup())
@@ -132,9 +140,8 @@ public class VInjectLoader {
 		return jpl;
 	}
 	public ClassNode applyInjectors(ClassNode node) {
-		if (DEBUG)
-			out.printf("[VInject] Applying injectors to: %s%n", node.name);
-		List<ClassNode> injectors = injectorsByClassName.remove(ResourceUtil.asName(node.name));
+		String name = ResourceUtil.asName(node.name);
+		List<ClassNode> injectors = injectorsByClassName.remove(name);
 		if (injectors != null)
 			injectors.forEach(injector -> InjectUtil.modifyTemplate(node, injector));
 		return node;

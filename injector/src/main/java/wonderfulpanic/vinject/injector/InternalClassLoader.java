@@ -20,8 +20,10 @@ package wonderfulpanic.vinject.injector;
 import java.net.URL;
 
 public interface InternalClassLoader {
-	public void vinject$addToClassloaders();
 	public URL vinject$getResource(String name);
-	public Class<?> vinject$loadClass(String name) throws ClassNotFoundException;
-	public Class<?> vinject$defineClass(byte[] bytes);
+	public Class<?> vinject$loadClass(String name, String plugin) throws ClassNotFoundException;
+	//VInjectClassLoader only
+	public default byte[] vinject$injectClass(String name, URL url, String plugin) throws ClassNotFoundException {
+		throw new UnsupportedOperationException();
+	}
 }

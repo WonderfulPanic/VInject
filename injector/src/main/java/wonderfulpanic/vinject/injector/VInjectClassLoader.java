@@ -59,43 +59,41 @@ public class VInjectClassLoader extends URLClassLoader implements InternalClassL
 					return InternalClassLoader.class;
 				throw new ClassNotFoundException(name);
 			}
-			URL url = super.getResource(path);
+			URL url = vinject$getResource(path);
 			if (url != null) {
-				if (!loader.containsInjector(name))
-					return super.loadClass(name, false);
-				return defineClass(loader.applyInjectors(ResourceUtil.getNode(url)));
+				byte[] bytes = vinject$injectClass(name, url, "velocity");
+				if (bytes != null)
+					return super.defineClass(null, bytes, 0, bytes.length);
+				return super.loadClass(name, false);
 			}
 			for (Plugin plugin : loader.getPluginManager().getPlugins()) {
-				InternalClassLoader accessor = (InternalClassLoader) plugin.getClassLoader();
-				url = accessor.vinject$getResource(path);
+				InternalClassLoader internal = (InternalClassLoader) plugin.getClassLoader();
+				url = internal.vinject$getResource(path);
 				if (url == null)
 					continue;
 				if (DEBUG)
-					out.printf("[VInject] Found class %s for velocity in plugin: %s%n", name, plugin.id());
-				if (!loader.containsInjector(name))
-					return accessor.vinject$loadClass(name);
-				return defineClassInPlugin(plugin, loader.applyInjectors(ResourceUtil.getNode(url)));
+					out.printf("[VInject] [velocity] Found class %s in %s%n", name, plugin.id());
+				return internal.vinject$loadClass(name, null);
 			}
 			throw new ClassNotFoundException(name);
 		}
 	}
 	@Override
-	public Class<?> vinject$loadClass(String name) throws ClassNotFoundException {
+	public Class<?> vinject$loadClass(String name, String plugin) throws ClassNotFoundException {
 		synchronized (getClassLoadingLock(name)) {
 			Class<?> cl = findLoadedClass(name);
 			if (cl != null)
 				return cl;
-			String path = ResourceUtil.addClassExt(ResourceUtil.asPath(name));
-			if (ClassLoader.getPlatformClassLoader().getResource(path) != null)
-				return ClassLoader.getPlatformClassLoader().loadClass(name);
 			if (DEBUG)
-				out.printf("[VInject] Searching class %s for plugin%n", name);
+				out.printf("[VInject] [%s] Searching class %s%n", plugin, name);
+			String path = ResourceUtil.addClassExt(ResourceUtil.asPath(name));
 			URL url = super.getResource(path);
 			if (url == null)
 				return null;
-			if (!loader.containsInjector(name))
-				return super.loadClass(name, false);
-			return defineClass(loader.applyInjectors(ResourceUtil.getNode(url)));
+			byte[] bytes = vinject$injectClass(name, url, "velocity");
+			if (bytes != null)
+				return super.defineClass(null, bytes, 0, bytes.length);
+			return super.loadClass(name, false);
 		}
 	}
 	@Override
@@ -103,12 +101,12 @@ public class VInjectClassLoader extends URLClassLoader implements InternalClassL
 		return super.getResource(name);
 	}
 	@Override
-	public void vinject$addToClassloaders() {
-		throw new UnsupportedOperationException();
-	}
-	@Override
-	public Class<?> vinject$defineClass(byte[] bytes) {
-		throw new UnsupportedOperationException();
+	public byte[] vinject$injectClass(String name, URL url, String plugin) throws ClassNotFoundException {
+		if (!loader.containsInjector(name))
+			return null;
+		if (DEBUG)
+			out.printf("[VInject] [%s] Applying injectors to: %s%n", plugin, name);
+		return getBytes(loader.applyInjectors(ResourceUtil.getNode(url)), plugin);
 	}
 	public void enableClassLoading() {
 		classLoading = true;
@@ -116,21 +114,17 @@ public class VInjectClassLoader extends URLClassLoader implements InternalClassL
 	public void disableClassLoading() {
 		classLoading = false;
 	}
-	public Class<?> defineClass(ClassNode node) {
-		if (DEBUG)
-			out.printf("[VInject] Class %s defined in velocity%n", node.name);
-		byte[] bytes = ResourceUtil.getBytes(node);
-		if (EXPORT)
-			ResourceUtil.exportClass(bytes, "velocity", node.name);
-		return defineClass(null, bytes, 0, bytes.length);
+	protected Class<?> defineClass(ClassNode node) {
+		byte[] bytes = getBytes(node, "velocity");
+		return super.defineClass(null, bytes, 0, bytes.length);
 	}
-	public static Class<?> defineClassInPlugin(Plugin plugin, ClassNode node) {
+	private static byte[] getBytes(ClassNode node, String id) {
 		if (DEBUG)
-			out.printf("[VInject] Class %s defined in %s%n", node.name, plugin.id());
+			out.printf("[VInject] [%s] Class defined: %s%n", id, ResourceUtil.asName(node.name));
 		byte[] bytes = ResourceUtil.getBytes(node);
 		if (EXPORT)
-			ResourceUtil.exportClass(bytes, plugin.id(), node.name);
-		return ((InternalClassLoader) plugin.getClassLoader()).vinject$defineClass(bytes);
+			ResourceUtil.exportClass(bytes, id, node.name);
+		return bytes;
 	}
 	static {
 		ClassLoader.registerAsParallelCapable();

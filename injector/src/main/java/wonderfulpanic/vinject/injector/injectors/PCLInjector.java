@@ -20,6 +20,8 @@ package wonderfulpanic.vinject.injector.injectors;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_STATIC;
 import static org.objectweb.asm.Opcodes.ACC_SYNTHETIC;
+
+import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.Set;
@@ -35,6 +37,8 @@ public abstract class PCLInjector {
 	public static ClassNode injectPCL(ClassNode target) throws ClassNotFoundException {
 		target.visitField(ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC,
 			"vinject$velocity", 'L' + INTERNAL + ';', null, null);
+		target.visitField(ACC_PRIVATE | ACC_SYNTHETIC,
+			"vinject$plugin", "Ljava/lang/String;", null, null);
 		target.interfaces.add(INTERNAL);
 		target.methods.remove(InjectUtil.findMethod(target, "<init>", "([Ljava/net/URL;)V"));
 		target.methods.remove(InjectUtil.findMethod(target, "loadClass", "(Ljava/lang/String;Z)Ljava/lang/Class;"));
@@ -50,12 +54,19 @@ public abstract class PCLInjector {
 	private static class Injector extends URLClassLoader implements InternalClassLoader {
 		private static Set<Injector> loaders;
 		private static InternalClassLoader vinject$velocity;
+		private final String vinject$plugin;
 		public Injector(URL[] urls) {
 			super(urls, ClassLoader.getPlatformClassLoader());
+			vinject$plugin = urls.length>0?new File(urls[0].getFile()).getName():"dynamic-unknown";
+		}
+		public Injector(URL[] urls, String plugin) {
+			super(urls, ClassLoader.getPlatformClassLoader());
+			vinject$plugin = plugin;
+			loaders.add(this);
 		}
 		@Override
 		public URL getResource(String name) {
-			URL url = super.getResource(name);
+			URL url = vinject$getResource(name);
 			if (url != null)
 				return url;
 			url = vinject$velocity.vinject$getResource(name);
@@ -72,40 +83,45 @@ public abstract class PCLInjector {
 		}
 		@Override
 		protected Class<?> loadClass(String name, boolean ignore) throws ClassNotFoundException {
-			try {
-				return super.loadClass(name, false);
-			} catch (ClassNotFoundException ignored) {
-
-			}
-			Class<?> cl = vinject$velocity.vinject$loadClass(name);
+			String path = vinject$getPath(name);
+			if (ClassLoader.getPlatformClassLoader().getResource(path) != null)
+				return ClassLoader.getPlatformClassLoader().loadClass(name);
+			URL url = vinject$getResource(path);
+			if (url != null)
+				return vinject$loadClass(name, vinject$plugin);
+			Class<?> cl = vinject$velocity.vinject$loadClass(name, vinject$plugin);
 			if (cl != null)
 				return cl;
 			for (Injector loader : loaders) {
 				if (loader == this)
 					continue;
-				try {
-					return loader.vinject$loadClass(name);
-				} catch (ClassNotFoundException ignored) {
-
-				}
+				url = vinject$getResource(path);
+				if (url != null)
+					return loader.vinject$loadClass(name, vinject$plugin);
 			}
 			throw new ClassNotFoundException(name);
 		}
 		@Override
-		public void vinject$addToClassloaders() {
-			loaders.add(this);
+		public Class<?> vinject$loadClass(String name, String plugin) throws ClassNotFoundException {
+			synchronized (getClassLoadingLock(name)) {
+				Class<?> cl = findLoadedClass(name);
+				if (cl != null)
+					return cl;
+				URL url = vinject$getResource(vinject$getPath(name));
+				if (url == null)
+					return null;
+				byte[] bytes = vinject$velocity.vinject$injectClass(name, url, vinject$plugin);
+				if (bytes != null)
+					return super.defineClass(null, bytes, 0, bytes.length);
+				return super.loadClass(name, false);
+			}
 		}
 		@Override
 		public URL vinject$getResource(String name) {
 			return super.getResource(name);
 		}
-		@Override
-		public Class<?> vinject$loadClass(String name) throws ClassNotFoundException {
-			return super.loadClass(name, false);
-		}
-		@Override
-		public Class<?> vinject$defineClass(byte[] bytes) {
-			return super.defineClass(null, bytes, 0, bytes.length);
+		private static String vinject$getPath(String name) {
+			return name.replace('.', '/').concat(".class");
 		}
 	}
 }

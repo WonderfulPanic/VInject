@@ -88,11 +88,9 @@ public class VInjectPluginManager {
 	}
 	public VInjectPluginManager initPlugins(VInjectLoader loader, VInjectClassLoader classLoader,
 		MethodHandle constructor) throws Throwable {
-		for (Plugin plugin : plugins) {
-			Object instance = constructor.invokeExact(new URL[]{plugin.getPluginFile().toURI().toURL()});
-			plugin.setClassLoader((ClassLoader) instance);
-			((InternalClassLoader) instance).vinject$addToClassloaders();
-		}
+		for (Plugin plugin : plugins)
+			plugin.setClassLoader((ClassLoader)
+				constructor.invokeExact(new URL[]{plugin.getPluginFile().toURI().toURL()}, plugin.id()));
 		return this;
 	}
 	public int countVInjectPlugins() {
