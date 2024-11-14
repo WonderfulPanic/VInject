@@ -17,10 +17,10 @@
 
 package wonderfulpanic.vinject.injector.injectors;
 
+import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_STATIC;
 import static org.objectweb.asm.Opcodes.ACC_SYNTHETIC;
-
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -35,10 +35,9 @@ public abstract class PCLInjector {
 	public static final String PLUGIN_CLASS_LOADER = "com/velocitypowered/proxy/plugin/PluginClassLoader";
 	private static final String INTERNAL = "wonderfulpanic/vinject/injector/InternalClassLoader";
 	public static ClassNode injectPCL(ClassNode target) throws ClassNotFoundException {
-		target.visitField(ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC,
-			"vinject$velocity", 'L' + INTERNAL + ';', null, null);
-		target.visitField(ACC_PRIVATE | ACC_SYNTHETIC,
-			"vinject$plugin", "Ljava/lang/String;", null, null);
+		target.visitField(ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC, "vinject$velocity", 'L' + INTERNAL + ';', null,
+			null);
+		target.visitField(ACC_PRIVATE | ACC_FINAL | ACC_SYNTHETIC, "vinject$plugin", "Ljava/lang/String;", null, null);
 		target.interfaces.add(INTERNAL);
 		target.methods.remove(InjectUtil.findMethod(target, "<init>", "([Ljava/net/URL;)V"));
 		target.methods.remove(InjectUtil.findMethod(target, "loadClass", "(Ljava/lang/String;Z)Ljava/lang/Class;"));
@@ -57,7 +56,7 @@ public abstract class PCLInjector {
 		private final String vinject$plugin;
 		public Injector(URL[] urls) {
 			super(urls, ClassLoader.getPlatformClassLoader());
-			vinject$plugin = urls.length>0?new File(urls[0].getFile()).getName():"dynamic-unknown";
+			vinject$plugin = urls.length > 0 ? new File(urls[0].getFile()).getName() : "dynamic-unknown";
 		}
 		public Injector(URL[] urls, String plugin) {
 			super(urls, ClassLoader.getPlatformClassLoader());
