@@ -17,9 +17,6 @@
 
 package wonderfulpanic.vinject.injector;
 
-import static wonderfulpanic.vinject.injector.VInjectLoader.DEBUG;
-import static wonderfulpanic.vinject.injector.VInjectLoader.out;
-
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
