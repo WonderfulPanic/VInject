@@ -139,8 +139,12 @@ public abstract class InjectUtil {
 					invoke.bsmArgs[1] = new Handle(handle.getTag(), to, lambdaRenamer.apply(handle.getName()),
 						handle.getDesc(), handle.isInterface());
 				}
-			} else if (insn instanceof FrameNode frame && frame.local != null)
-				frame.local.replaceAll(obj -> from.equals(obj) ? to : obj);
+			} else if (insn instanceof FrameNode frame) {
+				if (frame.local != null)
+					frame.local.replaceAll(obj -> from.equals(obj) ? to : obj);
+				if (frame.stack != null)
+					frame.stack.replaceAll(obj -> from.equals(obj) ? to : obj);
+			}
 		}
 		return target;
 	}
