@@ -133,10 +133,13 @@ public abstract class InjectUtil {
 			} else if (insn instanceof InvokeDynamicInsnNode invoke) {
 				if (invoke.bsm.getOwner().contentEquals("java/lang/invoke/LambdaMetafactory") &&
 					invoke.bsm.getName().contentEquals("metafactory") &&
-					invoke.bsmArgs[1] instanceof Handle handle &&
-					lambdaPattern.matcher(handle.getName()).matches()) {
+					invoke.bsmArgs[1] instanceof Handle handle) {
 					invoke.desc = invoke.desc.replace(from, to);
-					invoke.bsmArgs[1] = new Handle(handle.getTag(), to, lambdaRenamer.apply(handle.getName()),
+					if (!handle.getOwner().contentEquals(from))
+						continue;
+					invoke.bsmArgs[1] = new Handle(handle.getTag(), to,
+						lambdaPattern.matcher(handle.getName()).matches() ?
+							lambdaRenamer.apply(handle.getName()) : handle.getName(),
 						handle.getDesc(), handle.isInterface());
 				}
 			} else if (insn instanceof FrameNode frame) {
