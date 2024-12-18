@@ -1,4 +1,4 @@
-# VInject (Velocity Inject)
+![VInject](https://socialify.git.ci/WonderfulPanic/VInject/image?description=1&font=Inter&language=1&name=1&owner=1&pattern=Circuit%20Board&theme=Auto)
 
 VInject is a wrapper for Minecraft server proxy [Velocity](https://github.com/PaperMC/Velocity)
 
